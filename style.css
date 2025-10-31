@@ -1,0 +1,8 @@
+html, body {
+  margin: 0;
+  overflow: auto;   /* allow scrolling */
+  background: #f3f1e8;
+}
+canvas {
+  display: block;
+}
