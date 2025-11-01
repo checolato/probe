@@ -1,21 +1,13 @@
-// app.js
-// Listening Garden (GitHub Pages + Google Apps Script)
-// ----------------------------------------------------
-// Features:
-// - speech → plants (soft, abstract, emotion-based)
-// - auto-expanding canvas
-// - capped plants for gallery stability
-// - random weather (rain/wind)
-// - rain is emotion-aware (looks at garden mood)
-// - popup collects visitor email → sent to GAS
-// - midnight: send canvas PNG → GAS (saved in YOUR Drive only)
-// - shared secret, so only your page can call GAS
-// ----------------------------------------------------
+// app.js (flicker-free) with BIRD ambient
+// ------------------------------------------------------
+// Always play: assets/bird.mp3
+// Play rain/wind: ONLY during cleaning animation
+// ------------------------------------------------------
 
 // ====== 0. CONFIG (EDIT THESE) ======
-const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzAdh6CbP6tJhllycZv8Qhr5a1l8PTPlW4YJ0BuP_VpwHaYTVvBPPODsIB6pROsDa6D/exec"; // CHANGE THIS
-const GARDEN_SECRET  = "pick-a-random-string-here"; // CHANGE THIS (same in Apps Script)
-const FINAL_SEND_DATE_ISO = "2025-11-21"; // for display only; actual send is in Apps Script
+const GAS_WEBAPP_URL = "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"; // CHANGE
+const GARDEN_SECRET  = "pick-a-random-string-here"; // CHANGE (same in Apps Script)
+const FINAL_SEND_DATE_ISO = "2025-11-21"; // for display/info
 
 // ====== 1. CANVAS SETUP ======
 const canvas = document.getElementById("garden");
@@ -23,21 +15,21 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// gallery safety
 const MAX_PLANTS = 700;
 const MAX_CANVAS_WIDTH = 5000;
 const MAX_CANVAS_HEIGHT = 5000;
 
-// audio elements (some may be missing and that's OK)
+// AUDIO
+const audioBird       = document.getElementById("birdAmbience");
 const audioRainSoft   = document.getElementById("rainSoft");
 const audioRainHeavy  = document.getElementById("rainHeavy");
 const audioWindGentle = document.getElementById("windGentle");
 const audioWindStrong = document.getElementById("windStrong");
 
-// plant store
+// PLANTS
 const plants = [];
 
-// weather state
+// WEATHER STATE
 let effectMode = "none"; // "none" | "rainout" | "windblow"
 let effectConfig = {
   fallSpeed: 0.4,
@@ -46,6 +38,23 @@ let effectConfig = {
   duration: 12000,
   startedAt: 0
 };
+
+// iPad-ish hardening
+document.documentElement.style.height = "100%";
+document.body.style.height = "100%";
+document.body.style.overflow = "hidden";
+
+let lastTouchEnd = 0;
+document.addEventListener("touchend", (e) => {
+  const now = Date.now();
+  if (now - lastTouchEnd <= 300) {
+    e.preventDefault();
+  }
+  lastTouchEnd = now;
+}, { passive: false });
+document.addEventListener("gesturestart", (e) => {
+  e.preventDefault();
+}, { passive: false });
 
 drawBackground();
 requestAnimationFrame(loop);
@@ -62,14 +71,12 @@ const popupSubmit   = document.getElementById("email-submit");
 const popupClose    = document.getElementById("email-close");
 const popupStatus   = document.getElementById("email-status");
 
-// show once after 25s
 setTimeout(() => {
   if (!localStorage.getItem("gardenEmailSaved")) {
     showEmailPopup();
   }
 }, 25000);
 
-// key shortcut
 window.addEventListener("keydown", (e) => {
   if (e.key === "e" || e.key === "E") {
     showEmailPopup();
@@ -77,48 +84,54 @@ window.addEventListener("keydown", (e) => {
 });
 
 function showEmailPopup() {
+  if (!popupBackdrop) return;
   popupBackdrop.style.display = "flex";
   popupStatus.textContent = "";
 }
 function hideEmailPopup() {
+  if (!popupBackdrop) return;
   popupBackdrop.style.display = "none";
 }
 
-popupClose.addEventListener("click", hideEmailPopup);
+if (popupClose) {
+  popupClose.addEventListener("click", hideEmailPopup);
+}
 
-popupSubmit.addEventListener("click", () => {
-  const email = (popupInput.value || "").trim();
-  if (!email) {
-    popupStatus.textContent = "Please enter an email.";
-    popupStatus.style.color = "#c14949";
-    return;
-  }
-  popupStatus.textContent = "Saving...";
-  popupStatus.style.color = "#5b574e";
+if (popupSubmit) {
+  popupSubmit.addEventListener("click", () => {
+    const email = (popupInput?.value || "").trim();
+    if (!email) {
+      popupStatus.textContent = "Please enter an email.";
+      popupStatus.style.color = "#c14949";
+      return;
+    }
+    popupStatus.textContent = "Saving...";
+    popupStatus.style.color = "#5b574e";
 
-  fetch(GAS_WEBAPP_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "registerEmail",
-      email: email,
-      ts: new Date().toISOString(),
-      secret: GARDEN_SECRET
+    fetch(GAS_WEBAPP_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "registerEmail",
+        email,
+        ts: new Date().toISOString(),
+        secret: GARDEN_SECRET
+      })
     })
-  })
-  .then(r => r.json())
-  .then(data => {
-    popupStatus.textContent = data.message || "Saved. Thank you!";
-    popupStatus.style.color = "#2d665f";
-    localStorage.setItem("gardenEmailSaved", "1");
-    setTimeout(hideEmailPopup, 2000);
-  })
-  .catch(err => {
-    console.warn(err);
-    popupStatus.textContent = "Could not save right now.";
-    popupStatus.style.color = "#c14949";
+      .then(r => r.json())
+      .then(data => {
+        popupStatus.textContent = data.message || "Saved. Thank you!";
+        popupStatus.style.color = "#2d665f";
+        localStorage.setItem("gardenEmailSaved", "1");
+        setTimeout(hideEmailPopup, 2000);
+      })
+      .catch(err => {
+        console.warn(err);
+        popupStatus.textContent = "Could not save right now.";
+        popupStatus.style.color = "#c14949";
+      });
   });
-});
+}
 
 // ====== 3. SPEECH RECOGNITION ======
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -142,7 +155,8 @@ if (SpeechRecognition) {
   };
 
   recognition.onstart = () => {
-    playAmbientLoops();
+    // start bird ambience here
+    startBirdLoop();
   };
 
   recognition.onend = () => {
@@ -156,28 +170,27 @@ if (SpeechRecognition) {
   console.warn("SpeechRecognition not supported.");
 }
 
-// idle plants so it never stops
+// idle plants
 setInterval(() => {
   makePlantFromSpeech("idle sprout", 0.5);
 }, 20000);
 
-// ====== 4. SPEECH → PLANT ======
+// ====== 4. SPEECH → PLANT (precomputed so no flicker) ======
 function makePlantFromSpeech(text, confidence) {
-  const cfg = textToPlantConfig(text, confidence);
-  plants.push(cfg);
+  const plant = textToPlantConfig(text, confidence);
+  buildPlantVisual(plant);
+  plants.push(plant);
 
-  // safety cap
   if (plants.length > MAX_PLANTS) {
     plants.shift();
   }
 
-  expandCanvasIfNeeded(cfg);
+  expandCanvasIfNeeded(plant);
 }
 
 function textToPlantConfig(text, confidence) {
   const words = text.trim().split(/\s+/).filter(Boolean);
   const len = words.length;
-
   const emo = analyzeEmotion(text);
 
   let height = 120 + Math.min(len, 20) * 7;
@@ -189,7 +202,6 @@ function textToPlantConfig(text, confidence) {
   const margin = 80;
   const x = margin + Math.random() * Math.max(200, canvas.width - margin * 2);
   const y = margin + Math.random() * Math.max(200, canvas.height - margin * 2);
-
   const complexity = Math.min(1 + Math.floor(len / 4), 4);
 
   return {
@@ -203,8 +215,79 @@ function textToPlantConfig(text, confidence) {
     energy: emo.energy,
     alpha: 1,
     driftX: 0,
-    driftY: 0
+    driftY: 0,
+    visual: null
   };
+}
+
+function buildPlantVisual(p) {
+  const { x, y, height, complexity = 2, mood = "neutral" } = p;
+  const topY = y - height;
+  const palette = PALETTES[mood] || PALETTES.neutral;
+
+  const stem = {
+    startX: x,
+    startY: y,
+    c1x: x + rand(-10, 10),
+    c1y: y - height * 0.35,
+    c2x: x + rand(-8, 8),
+    c2y: y - height * 0.7,
+    endX: x + rand(-3, 3),
+    endY: topY
+  };
+
+  const blobs = [];
+
+  // main top
+  blobs.push({
+    x: stem.endX + rand(-6, 6),
+    y: topY - rand(0, 16),
+    rx: rand(40, 80) * (mood === "sad" ? 0.8 : 1) * (mood === "joyful" ? 1.1 : 1) / 2,
+    ry: rand(26, 50) / 2,
+    rot: rand(-0.4, 0.4),
+    color: pick(palette),
+    highlight: Math.random() < 0.4
+  });
+
+  // mood → blob count
+  let blobCount = complexity;
+  if (mood === "joyful") blobCount += 1;
+  if (mood === "angry")  blobCount += 1;
+  if (mood === "sad")    blobCount = Math.max(1, blobCount - 1);
+
+  for (let i = 0; i < blobCount; i++) {
+    blobs.push({
+      x: x + rand(-26, 22),
+      y: topY + rand(-18, 30),
+      rx: rand(20, 55) * (mood === "angry" ? 1.1 : 1) / 2,
+      ry: rand(14, 32) / 2,
+      rot: rand(-0.4, 0.4),
+      color: pick(palette),
+      highlight: Math.random() < 0.4
+    });
+  }
+
+  // trailing along stem
+  const trailCount = mood === "angry" ? randInt(3, 6)
+                    : mood === "joyful" ? randInt(2, 4)
+                    : randInt(1, 3);
+
+  for (let i = 0; i < trailCount; i++) {
+    const t = Math.random();
+    const by = y - height * t;
+    const spread = mood === "angry" ? 40 : mood === "calm" ? 18 : 25;
+    blobs.push({
+      x: x + rand(-spread, spread),
+      y: by + rand(-10, 10),
+      rx: rand(10, 26) / 2,
+      ry: rand(8, 20) / 2,
+      rot: rand(-0.4, 0.4),
+      color: pick(palette),
+      highlight: Math.random() < 0.35
+    });
+  }
+
+  p.visual = { stem, blobs };
 }
 
 // ====== 5. CANVAS EXPANSION ======
@@ -233,9 +316,17 @@ function expandCanvasIfNeeded(plant) {
   newHeight = Math.min(newHeight, MAX_CANVAS_HEIGHT);
 
   if (addTop > 0) {
-    // shift existing plants down
     for (const p of plants) {
       p.y += addTop;
+      if (p.visual) {
+        p.visual.stem.startY += addTop;
+        p.visual.stem.c1y    += addTop;
+        p.visual.stem.c2y    += addTop;
+        p.visual.stem.endY   += addTop;
+        for (const b of p.visual.blobs) {
+          b.y += addTop;
+        }
+      }
     }
   }
 
@@ -277,7 +368,7 @@ function analyzeEmotion(text) {
   return { mood, energy, keywords: score };
 }
 
-// ====== 7. VISUALS ======
+// ====== 7. PALETTES ======
 const PALETTES = {
   joyful: [
     "rgba(255, 196, 160, 0.75)",
@@ -317,124 +408,79 @@ const STEMS = {
   neutral: "rgba(175, 195, 221, 0.5)"
 };
 
-function drawPlantSoftAbstractEmotion(p) {
-  const { x, y, height, complexity = 2, mood = "neutral" } = p;
-  const palette = PALETTES[mood] || PALETTES.neutral;
-  const stemColor = STEMS[mood] || STEMS.neutral;
-  const alpha = p.alpha !== undefined ? p.alpha : 1;
-  const topY = y - height;
-
-  ctx.save();
-  ctx.globalAlpha = alpha;
-
-  // stem
-  ctx.strokeStyle = stemColor;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x + p.driftX, y + p.driftY);
-  ctx.bezierCurveTo(
-    x + rand(-10, 10) + p.driftX,
-    y - height * 0.35 + p.driftY,
-    x + rand(-8, 8) + p.driftX,
-    y - height * 0.7 + p.driftY,
-    x + rand(-3, 3) + p.driftX,
-    topY + p.driftY
-  );
-  ctx.stroke();
-
-  // mood → number of blobs
-  let blobCount = complexity;
-  if (mood === "joyful") blobCount += 1;
-  if (mood === "angry")  blobCount += 1;
-  if (mood === "sad")    blobCount = Math.max(1, blobCount - 1);
-
-  // main top
-  drawSoftBlob(
-    x + rand(-6, 6) + p.driftX,
-    topY - rand(0, 16) + p.driftY,
-    rand(40, 80) * (mood === "sad" ? 0.8 : 1) * (mood === "joyful" ? 1.1 : 1),
-    rand(26, 50),
-    pick(palette)
-  );
-
-  // satellites
-  for (let i = 0; i < blobCount; i++) {
-    drawSoftBlob(
-      x + rand(-26, 22) + p.driftX,
-      topY + rand(-18, 30) + p.driftY,
-      rand(20, 55) * (mood === "angry" ? 1.1 : 1),
-      rand(14, 32),
-      pick(palette)
-    );
-  }
-
-  // trailing
-  const trailCount = mood === "angry" ? randInt(3, 6)
-                    : mood === "joyful" ? randInt(2, 4)
-                    : randInt(1, 3);
-
-  for (let i = 0; i < trailCount; i++) {
-    const t = Math.random();
-    const by = y - height * t;
-    const spread = mood === "angry" ? 40 : mood === "calm" ? 18 : 25;
-    drawSoftBlob(
-      x + rand(-spread, spread) + p.driftX,
-      by + rand(-10, 10) + p.driftY,
-      rand(10, 26),
-      rand(8, 20),
-      pick(palette)
-    );
-  }
-
-  ctx.restore();
-}
-
-function drawSoftBlob(cx, cy, w, h, color) {
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(rand(-0.4, 0.4));
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  if (Math.random() < 0.4) {
-    ctx.fillStyle = "rgba(255,255,255,0.12)";
-    ctx.beginPath();
-    ctx.ellipse(-w * 0.12, -h * 0.12, w / 3.5, h / 3.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.restore();
-}
-
 // ====== 8. BACKGROUND ======
 function drawBackground() {
   ctx.fillStyle = "#f3f1e8";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-// ====== 9. ANIMATION LOOP ======
+// ====== 9. DRAW PLANTS (stable) ======
+function drawPlant(p) {
+  if (!p.visual) return;
+
+  const mood = p.mood || "neutral";
+  const stemColor = STEMS[mood] || STEMS.neutral;
+
+  ctx.save();
+  ctx.globalAlpha = p.alpha ?? 1;
+
+  // stem
+  const s = p.visual.stem;
+  ctx.strokeStyle = stemColor;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(s.startX + p.driftX, s.startY + p.driftY);
+  ctx.bezierCurveTo(
+    s.c1x + p.driftX, s.c1y + p.driftY,
+    s.c2x + p.driftX, s.c2y + p.driftY,
+    s.endX + p.driftX, s.endY + p.driftY
+  );
+  ctx.stroke();
+
+  // blobs
+  for (const b of p.visual.blobs) {
+    ctx.save();
+    ctx.translate(b.x + p.driftX, b.y + p.driftY);
+    ctx.rotate(b.rot);
+    ctx.fillStyle = b.color;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, b.rx, b.ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (b.highlight) {
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      ctx.beginPath();
+      ctx.ellipse(-b.rx * 0.25, -b.ry * 0.25, b.rx * 0.55, b.ry * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+// ====== 10. ANIMATION LOOP ======
 function loop(timestamp) {
   drawBackground();
   updateEffects(timestamp);
-
   for (const p of plants) {
     if (p.alpha > 0.01) {
-      drawPlantSoftAbstractEmotion(p);
+      drawPlant(p);
     }
   }
-
   requestAnimationFrame(loop);
 }
 
-// ====== 10. EFFECTS (rain / wind) ======
+// ====== 11. EFFECTS / WEATHER ======
 function updateEffects(t) {
   if (effectMode === "none") return;
 
   const elapsed = t - effectConfig.startedAt;
   if (elapsed > effectConfig.duration) {
+    // effect ended
     effectMode = "none";
+    stopWeatherAudio();     // <--- stop rain/wind
+    unduckBird();           // <--- restore bird volume
     return;
   }
 
@@ -454,7 +500,6 @@ function updateEffects(t) {
   }
 }
 
-// ====== 11. EMOTION-AWARE RAIN ======
 function getGardenEmotionProfile() {
   const counts = { joyful: 0, calm: 0, sad: 0, angry: 0, neutral: 0 };
   for (const p of plants) {
@@ -479,6 +524,9 @@ function triggerRainout() {
   effectMode = "rainout";
   effectConfig.startedAt = performance.now();
   effectConfig.duration = 12000;
+
+  // when rain starts → duck bird
+  duckBird();
 
   if (dom === "joyful") {
     effectConfig.fallSpeed = 0.25;
@@ -514,12 +562,15 @@ function triggerWindblow() {
   effectConfig.duration = 12000;
   effectConfig.driftX = 0.6;
   effectConfig.fadeSpeed = 0.0035;
+
+  // when wind starts → duck bird
+  duckBird();
   playEmotionWind("angry");
 }
 
-// ====== 12. RANDOM WEATHER ======
+// random weather
 function scheduleRandomWeather() {
-  const delay = randInt(3, 10) * 60 * 1000; // 3–10 minutes
+  const delay = randInt(3, 10) * 60 * 1000;
   setTimeout(() => {
     const r = Math.random();
     if (r < 0.6) triggerRainout();
@@ -529,13 +580,28 @@ function scheduleRandomWeather() {
 }
 scheduleRandomWeather();
 
-// ====== 13. AUDIO HELPERS ======
-function playAmbientLoops() {
-  if (audioRainSoft)   safePlay(audioRainSoft, 0.35);
-  if (audioWindGentle) safePlay(audioWindGentle, 0.2);
+// ====== 12. AUDIO LOGIC ======
+function startBirdLoop() {
+  if (!audioBird) return;
+  audioBird.volume = 0.5;
+  const p = audioBird.play();
+  if (p && p.catch) p.catch(() => {});
+}
+
+function duckBird() {
+  if (!audioBird) return;
+  audioBird.volume = 0.15;
+}
+
+function unduckBird() {
+  if (!audioBird) return;
+  audioBird.volume = 0.5;
 }
 
 function playEmotionRain(mood) {
+  // ONLY called during cleaning
+  stopWeatherAudio(); // stop previous if any
+
   if ((mood === "sad" || mood === "angry") && audioRainHeavy) {
     safePlay(audioRainHeavy, 0.55);
     return;
@@ -548,12 +614,23 @@ function playEmotionRain(mood) {
 }
 
 function playEmotionWind(mood) {
+  // ONLY called during cleaning
+  stopWeatherAudio();
   if (mood === "angry" && audioWindStrong) {
     safePlay(audioWindStrong, 0.6);
     return;
   }
   if (audioWindGentle) {
-    safePlay(audioWindGentle, 0.3);
+    safePlay(audioWindGentle, 0.35);
+  }
+}
+
+function stopWeatherAudio() {
+  const arr = [audioRainSoft, audioRainHeavy, audioWindGentle, audioWindStrong];
+  for (const a of arr) {
+    if (!a) continue;
+    a.pause();
+    a.currentTime = 0;
   }
 }
 
@@ -561,21 +638,16 @@ function safePlay(audioEl, vol = 0.5) {
   if (!audioEl) return;
   audioEl.volume = vol;
   const p = audioEl.play();
-  if (p && p.catch) {
-    p.catch(() => {
-      // autoplay might be blocked; it's fine for gallery
-    });
-  }
+  if (p && p.catch) p.catch(() => {});
 }
 
-// ====== 14. MIDNIGHT SCREENSHOT → GAS ======
+// ====== 13. MIDNIGHT SCREENSHOT → GAS ======
 scheduleMidnightScreenshot();
 
 function scheduleMidnightScreenshot() {
   const now = new Date();
   const tomorrow = new Date(now);
   tomorrow.setDate(now.getDate() + 1);
-  // midnight + small buffer
   tomorrow.setHours(0, 0, 5, 0);
   const ms = tomorrow.getTime() - now.getTime();
 
@@ -600,7 +672,7 @@ function sendCanvasScreenshot() {
   }).catch(e => console.warn("screenshot upload failed", e));
 }
 
-// ====== 15. UTILS ======
+// ====== 14. UTILS ======
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
