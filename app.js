@@ -158,6 +158,36 @@ if (popupSubmit) {
   });
 }
 
+function registerEmail(email, ts) {
+  if (!email) {
+    return jsonOut({ ok: false, message: "no email provided" });
+  }
+
+  // create or get a sheet called "emails"
+  const sheet = getOrCreateSheet("emails", ["createdAt", "email", "ts"]);
+  sheet.appendRow([new Date(), email, ts || ""]);
+
+  return jsonOut({ ok: true, message: "Email saved" });
+}
+
+function getOrCreateSheet(name, headers) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.create("ListeningGardenData");
+  let sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    if (headers && headers.length) {
+      sh.appendRow(headers);
+    }
+  }
+  return sh;
+}
+
+function jsonOut(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+
 // ====== 8. SPEECH RECOGNITION ======
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
