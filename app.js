@@ -21,7 +21,7 @@
  ************************************************************/
 
 // ====== 0. CONFIG (EDIT THESE) ======
-const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwPOPa01cG7ZivcnDmsoirccx_cp26mZws7RSh8W_-IosLEBbNjgDmoGIQtJHOMVKEK/exec";
+const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwYqTTUnTaBkLA8Zt-7ZZom_pIJJCtRYauPaz41dWC2jW51lFtfgub_GbGAJzhGmKAC/exec";
 const GARDEN_SECRET  = "probe"; // 
 const DEFAULT_GARDEN_ID = "risd-main";          
 const FINAL_SEND_DATE_ISO = "2025-11-21";       
