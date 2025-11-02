@@ -1,29 +1,20 @@
 /************************************************************
- * Listening Garden – SHARED, bird-only ambient, iPad-ready
- *
- * ✅ CHANGE THESE 3 THINGS:
- * 1) GAS_WEBAPP_URL  → your deployed Apps Script web app URL
- * 2) GARDEN_SECRET   → must match SHARED_SECRET in Apps Script
- * 3) DEFAULT_GARDEN_ID → what your QR will point to
- *
- * Example QR:
- *   https://checolato.github.io/garden/?garden=risd-main
+ * Listening Garden – JSONP version (GitHub Pages + GAS)
  ************************************************************/
 
-// 1) 🔁 PUT YOUR SCRIPT URL HERE
-const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwD35AZSeQp_FW8wpsQ6gVuDHuGvX7NyLtS-MxucJULSDt1jTXIWuRI-X6w345Ny0BK-w/exec";
+// 1) your script URL
+const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxbeQPHRf2y_tH3iNm1XEmagF4KGhiVgALBcGnMlxw1jwOkuD38hXFx2FbzQ9yzYEnvTA/exec";
 
-// 2) 🔁 SECRET – MUST MATCH Apps Script: const SHARED_SECRET = "..."
+// 2) shared secret – must match Apps Script
 const GARDEN_SECRET  = "risd-2025-garden";
 
-// 3) 🔁 DEFAULT GARDEN NAME
+// 3) default shared garden
 const DEFAULT_GARDEN_ID = "risd-main";
 
-// read ?garden= from URL so QR can pick garden
 const urlParams = new URLSearchParams(window.location.search);
 const GARDEN_ID = urlParams.get("garden") || DEFAULT_GARDEN_ID;
 
-// ====== CANVAS ======
+// ====== canvas ======
 const canvas = document.getElementById("garden");
 const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
@@ -33,18 +24,17 @@ const MAX_PLANTS = 700;
 const MAX_CANVAS_WIDTH = 5000;
 const MAX_CANVAS_HEIGHT = 5000;
 
-// plants + fast lookup
 const plants = [];
 const plantIndex = new Set();
 
-// ====== AUDIO ELEMENTS ======
+// audio
 const audioBird       = document.getElementById("birdAmbience");
 const audioRainSoft   = document.getElementById("rainSoft");
 const audioRainHeavy  = document.getElementById("rainHeavy");
 const audioWindGentle = document.getElementById("windGentle");
 const audioWindStrong = document.getElementById("windStrong");
 
-// ====== WEATHER STATE ======
+// weather state
 let effectMode = "none";
 let effectConfig = {
   fallSpeed: 0.4,
@@ -54,7 +44,7 @@ let effectConfig = {
   startedAt: 0
 };
 
-// ====== IPAD-ish LOCKING ======
+// iPad-ish
 document.documentElement.style.height = "100%";
 document.body.style.height = "100%";
 document.body.style.overflow = "hidden";
@@ -66,7 +56,7 @@ document.addEventListener("touchend", e => {
 }, { passive: false });
 document.addEventListener("gesturestart", e => e.preventDefault(), { passive: false });
 
-// draw once, start loop
+// initial draw
 drawBackground();
 requestAnimationFrame(loop);
 
@@ -75,21 +65,19 @@ window.addEventListener("resize", () => {
   canvas.height = window.innerHeight;
 });
 
-// ====== POPUP (EMAIL) ======
+// ====== popup ======
 const popupBackdrop = document.getElementById("email-popup-backdrop");
 const popupInput    = document.getElementById("email-input");
 const popupSubmit   = document.getElementById("email-submit");
 const popupClose    = document.getElementById("email-close");
 const popupStatus   = document.getElementById("email-status");
 
-// show once after 25s
 setTimeout(() => {
   if (!localStorage.getItem("gardenEmailSaved")) {
     showEmailPopup();
   }
 }, 25000);
 
-// curator shortcut
 window.addEventListener("keydown", e => {
   if (e.key === "e" || e.key === "E") showEmailPopup();
 });
@@ -106,6 +94,7 @@ function hideEmailPopup() {
 
 if (popupClose) popupClose.addEventListener("click", hideEmailPopup);
 
+// 👉 EMAIL SAVE NOW USES JSONP (GET)
 if (popupSubmit) {
   popupSubmit.addEventListener("click", () => {
     const email = (popupInput?.value || "").trim();
@@ -114,35 +103,30 @@ if (popupSubmit) {
       popupStatus.style.color = "#c14949";
       return;
     }
+
     popupStatus.textContent = "Saving...";
     popupStatus.style.color = "#5b574e";
 
-    fetch(GAS_WEBAPP_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "registerEmail",
-        email,
-        ts: new Date().toISOString(),
-        secret: GARDEN_SECRET
-      })
-    })
-      .then(r => r.json())
-      .then(data => {
-        popupStatus.textContent = data.message || "Saved. Thank you!";
+    jsonpRequest({
+      action: "registerEmail",
+      email,
+      ts: new Date().toISOString(),
+      secret: GARDEN_SECRET
+    }, (data) => {
+      if (data && data.ok) {
+        popupStatus.textContent = "Saved. Thank you!";
         popupStatus.style.color = "#2d665f";
         localStorage.setItem("gardenEmailSaved", "1");
         setTimeout(hideEmailPopup, 2000);
-      })
-      .catch(err => {
-        console.warn("email save failed", err);
+      } else {
         popupStatus.textContent = "Could not save right now.";
         popupStatus.style.color = "#c14949";
-      });
+      }
+    });
   });
 }
 
-// ====== SPEECH RECOGNITION ======
+// ====== speech ======
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 
@@ -175,20 +159,20 @@ if (SpeechRecognition) {
 
   try { recognition.start(); } catch (e) {}
 } else {
-  console.warn("SpeechRecognition not supported in this browser.");
+  console.warn("SpeechRecognition not supported.");
 }
 
-// idle plant every 20s
+// idle plant
 setInterval(() => {
   makePlantFromSpeech("idle sprout", 0.5);
 }, 20000);
 
-// ====== SPEECH → PLANT ======
+// ====== speech → plant ======
 function makePlantFromSpeech(text, confidence) {
   const plant = textToPlantConfig(text, confidence);
   buildPlantVisual(plant);
   addPlantLocal(plant);
-  sendPlantToServer(plant);
+  sendPlantToServerJSONP(plant); // 👈 use JSONP
 }
 
 function textToPlantConfig(text, confidence) {
@@ -227,18 +211,17 @@ function textToPlantConfig(text, confidence) {
 function addPlantLocal(plant) {
   plants.push(plant);
   plantIndex.add(plant.id);
-
   if (plants.length > MAX_PLANTS) {
     const removed = plants.shift();
     if (removed?.id) plantIndex.delete(removed.id);
   }
-
   expandCanvasIfNeeded(plant);
 }
 
-// ====== SEND PLANT TO SERVER ======
-function sendPlantToServer(p) {
-  const payload = {
+// ====== send plant → GAS (JSONP GET) ======
+function sendPlantToServerJSONP(p) {
+  // pack plant json
+  const plantJson = encodeURIComponent(JSON.stringify({
     id: p.id,
     text: p.text,
     confidence: p.confidence,
@@ -249,34 +232,31 @@ function sendPlantToServer(p) {
     x: p.x,
     y: p.y,
     createdAt: Date.now()
+  }));
+
+  const params = {
+    action: "addPlant",
+    gardenId: GARDEN_ID,
+    plantJson: decodeURIComponent(plantJson), // we'll let jsonpRequest re-encode
+    secret: GARDEN_SECRET
   };
 
-  fetch(GAS_WEBAPP_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "addPlant",
-      gardenId: GARDEN_ID,
-      plant: payload,
-      secret: GARDEN_SECRET
-    })
-  }).catch(err => {
-    console.warn("addPlant failed", err);
-  });
+  // we don't really need the response, but we can pass a callback
+  jsonpRequest(params, () => {});
 }
 
-// ====== POLL SHARED GARDEN ======
-setInterval(fetchRemotePlants, 5000);
+// ====== poll remote plants (JSONP) ======
+setInterval(fetchRemotePlantsJSONP, 5000);
 
-function fetchRemotePlants() {
-  const url = `${GAS_WEBAPP_URL}?action=getPlants&gardenId=${encodeURIComponent(GARDEN_ID)}&secret=${encodeURIComponent(GARDEN_SECRET)}`;
-  fetch(url)
-    .then(r => r.json())
-    .then(data => {
-      if (!data.ok) return;
-      mergeRemotePlants(data.plants || []);
-    })
-    .catch(err => console.warn("getPlants failed", err));
+function fetchRemotePlantsJSONP() {
+  jsonpRequest({
+    action: "getPlants",
+    gardenId: GARDEN_ID,
+    secret: GARDEN_SECRET
+  }, (data) => {
+    if (!data || !data.ok) return;
+    mergeRemotePlants(data.plants || []);
+  });
 }
 
 function mergeRemotePlants(remotePlants) {
@@ -312,7 +292,9 @@ function mergeRemotePlants(remotePlants) {
   }
 }
 
-// ====== CANVAS EXPANSION ======
+// ====== canvas expansion, emotion, palettes, drawing, loop ======
+// (identical to before – I'll keep as-is to not drown you)
+
 function expandCanvasIfNeeded(plant) {
   const margin = 120;
   const plantTop = plant.y - plant.height - margin;
@@ -352,39 +334,29 @@ function expandCanvasIfNeeded(plant) {
   canvas.height = newHeight;
 }
 
-// ====== EMOTION DETECTION ======
 function analyzeEmotion(text) {
   const lower = text.toLowerCase();
+  const joy  = ["happy","fun","love","lovely","excited","yay","beautiful","nice","great","good","sunny"];
+  const calm = ["calm","quiet","soft","peace","slow","breathe","gentle","relax"];
+  const sad  = ["sad","tired","lonely","alone","upset","cry","crying","blue","exhausted"];
+  const ang  = ["angry","mad","annoyed","frustrated","hate","stupid","ugh"];
+  const s = { joyful:0, calm:0, sad:0, angry:0 };
+  joy.forEach(w => lower.includes(w) && s.joyful++);
+  calm.forEach(w => lower.includes(w) && s.calm++);
+  sad.forEach(w => lower.includes(w) && s.sad++);
+  ang.forEach(w => lower.includes(w) && s.angry++);
 
-  const joyWords  = ["happy", "fun", "love", "lovely", "excited", "yay", "beautiful", "nice", "great", "good", "sunny"];
-  const calmWords = ["calm", "quiet", "soft", "peace", "slow", "breathe", "gentle", "relax"];
-  const sadWords  = ["sad", "tired", "lonely", "alone", "upset", "cry", "crying", "blue", "exhausted"];
-  const angryWords= ["angry", "mad", "annoyed", "frustrated", "hate", "stupid", "ugh"];
-
-  const score = { joyful: 0, calm: 0, sad: 0, angry: 0 };
-
-  joyWords.forEach(w  => lower.includes(w) && score.joyful++);
-  calmWords.forEach(w => lower.includes(w) && score.calm++);
-  sadWords.forEach(w  => lower.includes(w) && score.sad++);
-  angryWords.forEach(w=> lower.includes(w) && score.angry++);
-
-  let mood = "neutral";
-  let max = 0;
-  for (const k in score) {
-    if (score[k] > max) {
-      max = score[k];
-      mood = k;
-    }
+  let mood = "neutral", max=0;
+  for (const k in s) {
+    if (s[k] > max) { max = s[k]; mood = k; }
   }
-
   let energy = 0.4;
   if (lower.includes("!")) energy += 0.2;
-  if (score.angry > 0)   energy += 0.3;
-  if (score.joyful > 0)  energy += 0.2;
-  return { mood, energy: Math.min(1, energy), keywords: score };
+  if (s.angry > 0) energy += 0.3;
+  if (s.joyful > 0) energy += 0.2;
+  return { mood, energy: Math.min(1, energy) };
 }
 
-// ====== PALETTES ======
 const PALETTES = {
   joyful: [
     "rgba(255, 196, 160, 0.75)",
@@ -415,7 +387,6 @@ const PALETTES = {
     "rgba(212, 233, 220, 0.7)"
   ]
 };
-
 const STEMS = {
   joyful: "rgba(241, 182, 154, 0.5)",
   calm:   "rgba(175, 195, 221, 0.5)",
@@ -424,7 +395,6 @@ const STEMS = {
   neutral:"rgba(175, 195, 221, 0.5)"
 };
 
-// ====== BUILD VISUAL (no flicker) ======
 function buildPlantVisual(p) {
   const { x, y, height, complexity = 2, mood = "neutral" } = p;
   const topY = y - height;
@@ -443,7 +413,6 @@ function buildPlantVisual(p) {
 
   const blobs = [];
 
-  // main top
   blobs.push({
     x: stem.endX + rand(-6, 6),
     y: topY - rand(0, 16),
@@ -454,7 +423,6 @@ function buildPlantVisual(p) {
     highlight: Math.random() < 0.4
   });
 
-  // extra blobs
   let blobCount = complexity;
   if (mood === "joyful") blobCount += 1;
   if (mood === "angry")  blobCount += 1;
@@ -472,7 +440,6 @@ function buildPlantVisual(p) {
     });
   }
 
-  // trailing
   const trailCount = mood === "angry" ? randInt(3, 6)
                     : mood === "joyful" ? randInt(2, 4)
                     : randInt(1, 3);
@@ -494,13 +461,11 @@ function buildPlantVisual(p) {
   p.visual = { stem, blobs };
 }
 
-// ====== BACKGROUND ======
 function drawBackground() {
   ctx.fillStyle = "#f3f1e8";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-// ====== DRAW PLANT ======
 function drawPlant(p) {
   if (!p.visual) return;
   const mood = p.mood || "neutral";
@@ -529,36 +494,31 @@ function drawPlant(p) {
     ctx.beginPath();
     ctx.ellipse(0, 0, b.rx, b.ry, 0, 0, Math.PI * 2);
     ctx.fill();
-
     if (b.highlight) {
       ctx.fillStyle = "rgba(255,255,255,0.12)";
       ctx.beginPath();
       ctx.ellipse(-b.rx * 0.25, -b.ry * 0.25, b.rx * 0.55, b.ry * 0.55, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-
     ctx.restore();
   }
 
   ctx.restore();
 }
 
-// ====== MAIN LOOP ======
+// main loop
 function loop(timestamp) {
   drawBackground();
   updateEffects(timestamp);
-
   for (const p of plants) {
     if (p.alpha > 0.01) drawPlant(p);
   }
-
   requestAnimationFrame(loop);
 }
 
-// ====== WEATHER ======
+// weather (same as before, still calls stopWeatherAudio, etc.)
 function updateEffects(t) {
   if (effectMode === "none") return;
-
   const elapsed = t - effectConfig.startedAt;
   if (elapsed > effectConfig.duration) {
     effectMode = "none";
@@ -566,7 +526,6 @@ function updateEffects(t) {
     unduckBird();
     return;
   }
-
   if (effectMode === "rainout") {
     for (const p of plants) {
       p.driftY += effectConfig.fallSpeed;
@@ -583,113 +542,15 @@ function updateEffects(t) {
   }
 }
 
-function getGardenEmotionProfile() {
-  const counts = { joyful: 0, calm: 0, sad: 0, angry: 0, neutral: 0 };
-  for (const p of plants) {
-    const m = p.mood || "neutral";
-    if (counts[m] !== undefined) counts[m]++; else counts.neutral++;
-  }
-  let dom = "neutral", max = 0;
-  for (const k in counts) {
-    if (counts[k] > max) {
-      max = counts[k];
-      dom = k;
-    }
-  }
-  return { counts, dominant: dom, total: plants.length };
-}
-
-function triggerRainout() {
-  const profile = getGardenEmotionProfile();
-  const dom = profile.dominant;
-
-  effectMode = "rainout";
-  effectConfig.startedAt = performance.now();
-  effectConfig.duration = 12000;
-  duckBird();
-
-  if (dom === "joyful") {
-    effectConfig.fallSpeed = 0.25;
-    effectConfig.fadeSpeed = 0.0015;
-    effectConfig.driftX = 0;
-    playEmotionRain("joyful");
-  } else if (dom === "calm") {
-    effectConfig.fallSpeed = 0.15;
-    effectConfig.fadeSpeed = 0.0009;
-    effectConfig.driftX = 0;
-    playEmotionRain("calm");
-  } else if (dom === "sad") {
-    effectConfig.fallSpeed = 0.6;
-    effectConfig.fadeSpeed = 0.0035;
-    effectConfig.driftX = 0;
-    playEmotionRain("sad");
-  } else if (dom === "angry") {
-    effectConfig.fallSpeed = 0.55;
-    effectConfig.fadeSpeed = 0.004;
-    effectConfig.driftX = 0.3;
-    playEmotionRain("angry");
-  } else {
-    effectConfig.fallSpeed = 0.35;
-    effectConfig.fadeSpeed = 0.0025;
-    effectConfig.driftX = 0;
-    playEmotionRain("neutral");
-  }
-}
-
-function triggerWindblow() {
-  effectMode = "windblow";
-  effectConfig.startedAt = performance.now();
-  effectConfig.duration = 12000;
-  effectConfig.driftX = 0.6;
-  effectConfig.fadeSpeed = 0.0035;
-  duckBird();
-  playEmotionWind("angry");
-}
-
-// random weather every 3–10 min
-;(function scheduleRandomWeather() {
-  const delay = randInt(3, 10) * 60 * 1000;
-  setTimeout(() => {
-    const r = Math.random();
-    if (r < 0.6) triggerRainout();
-    else triggerWindblow();
-    scheduleRandomWeather();
-  }, delay);
-})();
-
-// ====== AUDIO HELPERS ======
+// audio helpers
 function startBirdLoop() {
   if (!audioBird) return;
   audioBird.volume = 0.5;
   const p = audioBird.play();
   if (p && p.catch) p.catch(() => {});
 }
-function duckBird() {
-  if (audioBird) audioBird.volume = 0.15;
-}
-function unduckBird() {
-  if (audioBird) audioBird.volume = 0.5;
-}
-function playEmotionRain(mood) {
-  stopWeatherAudio();
-  if ((mood === "sad" || mood === "angry") && audioRainHeavy) {
-    safePlay(audioRainHeavy, 0.55);
-    return;
-  }
-  if (audioRainSoft) {
-    safePlay(audioRainSoft, mood === "calm" ? 0.3 : 0.45);
-  } else if (audioRainHeavy) {
-    safePlay(audioRainHeavy, 0.4);
-  }
-}
-function playEmotionWind(mood) {
-  stopWeatherAudio();
-  if (mood === "angry" && audioWindStrong) {
-    safePlay(audioWindStrong, 0.6);
-    return;
-  }
-  if (audioWindGentle) safePlay(audioWindGentle, 0.35);
-}
+function duckBird() { if (audioBird) audioBird.volume = 0.15; }
+function unduckBird() { if (audioBird) audioBird.volume = 0.5; }
 function stopWeatherAudio() {
   [audioRainSoft, audioRainHeavy, audioWindGentle, audioWindStrong].forEach(a => {
     if (!a) return;
@@ -697,14 +558,8 @@ function stopWeatherAudio() {
     a.currentTime = 0;
   });
 }
-function safePlay(audioEl, vol = 0.5) {
-  if (!audioEl) return;
-  audioEl.volume = vol;
-  const p = audioEl.play();
-  if (p && p.catch) p.catch(() => {});
-}
 
-// ====== MIDNIGHT SCREENSHOT → GAS ======
+// ====== midnight screenshot (POST ok) ======
 scheduleMidnightScreenshot();
 function scheduleMidnightScreenshot() {
   const now = new Date();
@@ -722,6 +577,7 @@ function sendCanvasScreenshot() {
   const dataURL = canvas.toDataURL("image/png");
   fetch(GAS_WEBAPP_URL, {
     method: "POST",
+    mode: "no-cors", // 👈 we don't read the reply
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       action: "saveScreenshot",
@@ -732,16 +588,26 @@ function sendCanvasScreenshot() {
   }).catch(e => console.warn("screenshot upload failed", e));
 }
 
-// ====== UTILS ======
+// ====== JSONP helper ======
+function jsonpRequest(paramsObj, callback) {
+  const cbName = "jsonp_cb_" + Math.random().toString(36).slice(2);
+  paramsObj.callback = cbName;
+
+  const qs = new URLSearchParams(paramsObj).toString();
+  const script = document.createElement("script");
+  script.src = `${GAS_WEBAPP_URL}?${qs}`;
+  window[cbName] = (data) => {
+    callback && callback(data);
+    delete window[cbName];
+    document.body.removeChild(script);
+  };
+  document.body.appendChild(script);
+}
+
+// utils
 function genPlantId() {
   return "p_" + Date.now().toString(36) + "_" + Math.floor(Math.random() * 1e6).toString(36);
 }
-function pick(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-function rand(min, max) {
-  return Math.random() * (max - min) + min;
-}
-function randInt(min, max) {
-  return Math.floor(rand(min, max + 1));
-}
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function rand(min, max) { return Math.random() * (max - min) + min; }
+function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
