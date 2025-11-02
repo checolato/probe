@@ -45,7 +45,7 @@ let effectConfig = {
 };
 
 // 🌿 Garden activation date/time (local time)
-const GARDEN_START = new Date("2025-11-03T08:00:00");
+const GARDEN_START = new Date("2025-11-03T16:00:00");
 
 // helper to check if we should listen yet
 function gardenIsActive() {
