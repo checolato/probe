@@ -11,7 +11,7 @@
  ************************************************************/
 
 // 1) 🔁 PUT YOUR SCRIPT URL HERE
-const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzttFUbanlNM4Z_2PRWlNWoW3W-x3qvS5MfN4Ss1mWnbmKhCmYHBcpXxdamX7nwIlWN/exec";
+const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwD35AZSeQp_FW8wpsQ6gVuDHuGvX7NyLtS-MxucJULSDt1jTXIWuRI-X6w345Ny0BK-w/exec";
 
 // 2) 🔁 SECRET – MUST MATCH Apps Script: const SHARED_SECRET = "..."
 const GARDEN_SECRET  = "risd-2025-garden";
