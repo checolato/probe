@@ -45,7 +45,12 @@ let effectConfig = {
 };
 
 // 🌿 Garden activation date/time (local time)
-const GARDEN_START = new Date("2025-11-03T08:00:00"); 
+const GARDEN_START = new Date("2025-11-03T08:00:00");
+
+// helper to check if we should listen yet
+function gardenIsActive() {
+  return new Date() >= GARDEN_START;
+}
 
 // iPad-ish
 //document.documentElement.style.height = "100%";
@@ -140,6 +145,8 @@ if (SpeechRecognition) {
   recognition.lang = "en-US";
 
   recognition.onresult = (event) => {
+    // only handle speech if garden is active
+    if (!gardenIsActive()) return;
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const res = event.results[i];
       if (res.isFinal) {
@@ -151,22 +158,47 @@ if (SpeechRecognition) {
   };
 
   recognition.onstart = () => {
-    startBirdLoop();
+    // only start bird when we actually start listening
+    if (gardenIsActive()) {
+      startBirdLoop();
+    }
   };
 
   recognition.onend = () => {
-    setTimeout(() => {
-      try { recognition.start(); } catch (e) {}
-    }, 300);
+    // only restart if we're past start time
+    if (gardenIsActive()) {
+      setTimeout(() => {
+        try { recognition.start(); } catch (e) {}
+      }, 300);
+    }
   };
 
-  try { recognition.start(); } catch (e) {}
+  // 🚫 DON'T start immediately if it's before Nov 3, 2025
+  if (gardenIsActive()) {
+    try { recognition.start(); } catch (e) {}
+  } else {
+    console.log("🌙 Garden is sleeping until", GARDEN_START.toLocaleString());
+  }
 } else {
   console.warn("SpeechRecognition not supported.");
 }
 
-// idle plant
+// ⏰ check every minute – when we pass the start time, start listening
 setInterval(() => {
+  if (!recognition) return;
+  if (gardenIsActive() && recognition && recognition._started !== true) {
+    try {
+      recognition.start();
+      recognition._started = true;
+      startBirdLoop();
+      console.log("🌤️ Garden has started listening.");
+    } catch (e) {}
+  }
+}, 60 * 1000);
+
+// idle plant – only after start time
+setInterval(() => {
+  if (!gardenIsActive()) return;
   makePlantFromSpeech("idle sprout", 0.5);
 }, 20000);
 
@@ -223,7 +255,6 @@ function addPlantLocal(plant) {
 
 // ====== send plant → GAS (JSONP GET) ======
 function sendPlantToServerJSONP(p) {
-  // pack plant json
   const plantJson = encodeURIComponent(JSON.stringify({
     id: p.id,
     text: p.text,
@@ -240,11 +271,10 @@ function sendPlantToServerJSONP(p) {
   const params = {
     action: "addPlant",
     gardenId: GARDEN_ID,
-    plantJson: decodeURIComponent(plantJson), // we'll let jsonpRequest re-encode
+    plantJson: decodeURIComponent(plantJson),
     secret: GARDEN_SECRET
   };
 
-  // we don't really need the response, but we can pass a callback
   jsonpRequest(params, () => {});
 }
 
@@ -296,7 +326,6 @@ function mergeRemotePlants(remotePlants) {
 }
 
 // ====== canvas expansion, emotion, palettes, drawing, loop ======
-// (identical to before – I'll keep as-is to not drown you)
 
 function expandCanvasIfNeeded(plant) {
   const margin = 120;
@@ -580,7 +609,7 @@ function sendCanvasScreenshot() {
   const dataURL = canvas.toDataURL("image/png");
   fetch(GAS_WEBAPP_URL, {
     method: "POST",
-    mode: "no-cors", // 👈 we don't read the reply
+    mode: "no-cors",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       action: "saveScreenshot",
