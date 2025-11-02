@@ -45,9 +45,9 @@ let effectConfig = {
 };
 
 // iPad-ish
-document.documentElement.style.height = "100%";
-document.body.style.height = "100%";
-document.body.style.overflow = "hidden";
+//document.documentElement.style.height = "100%";
+//document.body.style.height = "100%";
+//document.body.style.overflow = "hidden";
 let lastTouchEnd = 0;
 document.addEventListener("touchend", e => {
   const now = Date.now();
