@@ -14,7 +14,7 @@
 const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzttFUbanlNM4Z_2PRWlNWoW3W-x3qvS5MfN4Ss1mWnbmKhCmYHBcpXxdamX7nwIlWN/exec";
 
 // 2) 🔁 SECRET – MUST MATCH Apps Script: const SHARED_SECRET = "..."
-const GARDEN_SECRET  = "CHANGE_ME_TO_THE_SAME_SECRET";
+const GARDEN_SECRET  = "risd-2025-garden";
 
 // 3) 🔁 DEFAULT GARDEN NAME
 const DEFAULT_GARDEN_ID = "risd-main";
