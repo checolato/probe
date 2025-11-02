@@ -12,7 +12,7 @@
       background: #ffffff;
       overflow: auto;
       height: 100%;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Garamond, serif;
     }
     canvas {
       display: block;
@@ -37,18 +37,22 @@
       width: min(90vw, 360px);
       padding: 20px 20px 16px;
       box-shadow: 0 14px 35px rgba(0,0,0,0.08);
+      margin-right: 100px;
+      font-family: Garamond, serif;
     }
     #email-popup h2 {
       margin: 0 0 6px;
       font-size: 1.05rem;
       font-weight: 600;
       color: #2c2a24;
+      font-family: Garamond, serif;
     }
     #email-popup p {
       margin: 0 0 14px;
       font-size: 0.82rem;
       line-height: 1.4;
       color: #5b574e;
+      font-family: Garamond, serif;
     }
     #email-input {
       width: 100%;
@@ -57,16 +61,18 @@
       border: 1px solid rgba(0,0,0,0.12);
       font-size: 0.82rem;
       margin-bottom: 10px;
+      font-family: Garamond, serif;
     }
     #email-submit {
       width: 100%;
       padding: 8px 10px;
-      background: #2d665f;
+      background: #000000;
       color: #fffef9;
       border: none;
       border-radius: 8px;
       font-size: 0.82rem;
       cursor: pointer;
+      font-family: Garamond, serif;
     }
     #email-close {
       margin-top: 10px;
@@ -77,10 +83,12 @@
       text-decoration: underline;
       color: #868077;
       cursor: pointer;
+      font-family: Garamond, serif;
     }
     #email-status {
       font-size: 0.7rem;
       margin-top: 8px;
+      font-family: Garamond, serif;
     }
   </style>
 </head>
@@ -98,8 +106,8 @@
   <!-- POPUP -->
   <div id="email-popup-backdrop">
     <div id="email-popup">
-      <h2>Get the final garden</h2>
-      <p>Leave your email and we will send you the exhibition garden image on <strong>November 21</strong>.</p>
+      <h2>Get the final picture</h2>
+      <p>Leave your email and we will send you the picture of the garden on <strong>November 21</strong>.</p>
       <input id="email-input" type="email" placeholder="you@example.com" required />
       <button id="email-submit">Save my email</button>
       <div id="email-status"></div>
