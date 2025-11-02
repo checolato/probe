@@ -44,6 +44,9 @@ let effectConfig = {
   startedAt: 0
 };
 
+// 🌿 Garden activation date/time (local time)
+const GARDEN_START = new Date("2025-11-03T08:00:00"); 
+
 // iPad-ish
 //document.documentElement.style.height = "100%";
 //document.body.style.height = "100%";
