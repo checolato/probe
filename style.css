@@ -1,8 +1,16 @@
 html, body {
   margin: 0;
-  overflow: auto;   /* allow scrolling */
-  background: #f3f1e8;
+  padding: 0;
+  background: #ffffff;
+  height: 100%;
 }
+
+#garden {
+  display: block;
+  width: 100vw;   /* scale to device width */
+  height: auto;   /* keep aspect ratio */
+}
+
 canvas {
   display: block;
 }

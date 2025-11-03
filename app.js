@@ -17,8 +17,14 @@ const GARDEN_ID = urlParams.get("garden") || DEFAULT_GARDEN_ID;
 // ====== canvas ======
 const canvas = document.getElementById("garden");
 const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+
+// use the same base size on every device
+const CANVAS_BASE_WIDTH  = 1920;
+const CANVAS_BASE_HEIGHT = 1080;
+
+canvas.width  = CANVAS_BASE_WIDTH;
+canvas.height = CANVAS_BASE_HEIGHT;
+
 
 const MAX_PLANTS = 700;
 const MAX_CANVAS_WIDTH = 5000;
@@ -68,10 +74,10 @@ document.addEventListener("gesturestart", e => e.preventDefault(), { passive: fa
 drawBackground();
 requestAnimationFrame(loop);
 
-window.addEventListener("resize", () => {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-});
+//window.addEventListener("resize", () => {
+  //canvas.width = window.innerWidth;
+  //canvas.height = window.innerHeight;
+//});
 
 // ====== popup ======
 const popupBackdrop = document.getElementById("email-popup-backdrop");
@@ -590,6 +596,46 @@ function stopWeatherAudio() {
     a.currentTime = 0;
   });
 }
+
+function startBirdLoop() {
+  if (!audioBird) return;
+  audioBird.volume = 0.5;
+  const p = audioBird.play();
+  if (p && p.catch) p.catch(() => {});
+}
+function duckBird() { if (audioBird) audioBird.volume = 0.15; }
+function unduckBird() { if (audioBird) audioBird.volume = 0.5; }
+function stopWeatherAudio() {
+  [audioRainSoft, audioRainHeavy, audioWindGentle, audioWindStrong].forEach(a => {
+    if (!a) return;
+    a.pause();
+    a.currentTime = 0;
+  });
+}
+
+/* 🌿 Unlock audio on first user tap (fix for iPad / iPhone Safari) */
+let audioUnlocked = false;
+
+function unlockAudioOnce() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+
+  // try to start ambience
+  startBirdLoop();
+
+  // remove hint overlay if you added one
+  const hint = document.getElementById("tap-hint");
+  if (hint) hint.classList.add("hidden");
+
+  // remove listeners after first tap
+  window.removeEventListener("touchstart", unlockAudioOnce);
+  window.removeEventListener("click", unlockAudioOnce);
+}
+
+// listen for first user interaction
+window.addEventListener("touchstart", unlockAudioOnce, { passive: true });
+window.addEventListener("click", unlockAudioOnce);
+
 
 // ====== midnight screenshot (POST ok) ======
 scheduleMidnightScreenshot();
