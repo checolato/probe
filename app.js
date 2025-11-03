@@ -3,7 +3,7 @@
  ************************************************************/
 
 // 1) your script URL
-const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxbeQPHRf2y_tH3iNm1XEmagF4KGhiVgALBcGnMlxw1jwOkuD38hXFx2FbzQ9yzYEnvTA/exec";
+const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwU1suEvuxePi4Up6bdFo5A8ao1sGo-MfGXkACtu3GiXwb0IodILln_U52GTX7aQR4PKg/exec";
 
 // 2) shared secret – must match Apps Script
 const GARDEN_SECRET  = "risd-2025-garden";
@@ -45,7 +45,7 @@ let effectConfig = {
 };
 
 // 🌿 Garden activation date/time (local time)
-const GARDEN_START = new Date("2025-11-03T16:00:00");
+const GARDEN_START = new Date("2025-11-03T12:00:00");
 
 // helper to check if we should listen yet
 function gardenIsActive() {
