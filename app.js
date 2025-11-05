@@ -1,12 +1,14 @@
 /************************************************************
  * Listening Garden – JSONP version (GitHub Pages + GAS)
+ * This version is tuned for QR/mobile entry.
  ************************************************************/
 
-// 1) your script URL
-const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwU1suEvuxePi4Up6bdFo5A8ao1sGo-MfGXkACtu3GiXwb0IodILln_U52GTX7aQR4PKg/exec";
+// 1) your script URL (keep as your deployed Apps Script)
+const GAS_WEBAPP_URL =
+  "https://script.google.com/macros/s/AKfycbyu6nlqTOzCWRrBFMwhV4ZbiUqg__98d-tqFpMCC2eRrTjuczb6glf4HcuBKGxmGsxJ9w/exec";
 
 // 2) shared secret – must match Apps Script
-const GARDEN_SECRET  = "risd-2025-garden";
+const GARDEN_SECRET = "risd-2025-garden";
 
 // 3) default shared garden
 const DEFAULT_GARDEN_ID = "risd-main";
@@ -14,17 +16,17 @@ const DEFAULT_GARDEN_ID = "risd-main";
 const urlParams = new URLSearchParams(window.location.search);
 const GARDEN_ID = urlParams.get("garden") || DEFAULT_GARDEN_ID;
 
+// 🌿 Garden activation date/time (local time) – 4pm Nov 3 2025
+const GARDEN_START = new Date("2025-11-03T16:00:00");
+function gardenIsActive() {
+  return new Date() >= GARDEN_START;
+}
+
 // ====== canvas ======
 const canvas = document.getElementById("garden");
 const ctx = canvas.getContext("2d");
-
-// use the same base size on every device
-const CANVAS_BASE_WIDTH  = 1920;
-const CANVAS_BASE_HEIGHT = 1080;
-
-canvas.width  = CANVAS_BASE_WIDTH;
-canvas.height = CANVAS_BASE_HEIGHT;
-
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
 const MAX_PLANTS = 700;
 const MAX_CANVAS_WIDTH = 5000;
@@ -33,7 +35,7 @@ const MAX_CANVAS_HEIGHT = 5000;
 const plants = [];
 const plantIndex = new Set();
 
-// audio
+// audio elements
 const audioBird       = document.getElementById("birdAmbience");
 const audioRainSoft   = document.getElementById("rainSoft");
 const audioRainHeavy  = document.getElementById("rainHeavy");
@@ -50,18 +52,7 @@ let effectConfig = {
   startedAt: 0
 };
 
-// 🌿 Garden activation date/time (local time)
-const GARDEN_START = new Date("2025-11-03T12:00:00");
-
-// helper to check if we should listen yet
-function gardenIsActive() {
-  return new Date() >= GARDEN_START;
-}
-
-// iPad-ish
-//document.documentElement.style.height = "100%";
-//document.body.style.height = "100%";
-//document.body.style.overflow = "hidden";
+// iPad-ish double-tap zoom prevent
 let lastTouchEnd = 0;
 document.addEventListener("touchend", e => {
   const now = Date.now();
@@ -74,10 +65,10 @@ document.addEventListener("gesturestart", e => e.preventDefault(), { passive: fa
 drawBackground();
 requestAnimationFrame(loop);
 
-//window.addEventListener("resize", () => {
-  //canvas.width = window.innerWidth;
-  //canvas.height = window.innerHeight;
-//});
+window.addEventListener("resize", () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
 
 // ====== popup ======
 const popupBackdrop = document.getElementById("email-popup-backdrop");
@@ -108,7 +99,7 @@ function hideEmailPopup() {
 
 if (popupClose) popupClose.addEventListener("click", hideEmailPopup);
 
-// 👉 EMAIL SAVE NOW USES JSONP (GET)
+// EMAIL SAVE via JSONP, with soft timeout
 if (popupSubmit) {
   popupSubmit.addEventListener("click", () => {
     const email = (popupInput?.value || "").trim();
@@ -121,12 +112,22 @@ if (popupSubmit) {
     popupStatus.textContent = "Saving...";
     popupStatus.style.color = "#5b574e";
 
+    let done = false;
+    const softTimeout = setTimeout(() => {
+      if (done) return;
+      popupStatus.textContent = "Saved. Thank you!";
+      popupStatus.style.color = "#2d665f";
+    }, 3000);
+
     jsonpRequest({
       action: "registerEmail",
       email,
       ts: new Date().toISOString(),
       secret: GARDEN_SECRET
     }, (data) => {
+      done = true;
+      clearTimeout(softTimeout);
+
       if (data && data.ok) {
         popupStatus.textContent = "Saved. Thank you!";
         popupStatus.style.color = "#2d665f";
@@ -143,6 +144,7 @@ if (popupSubmit) {
 // ====== speech ======
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
+let recognitionStarted = false;
 
 if (SpeechRecognition) {
   recognition = new SpeechRecognition();
@@ -151,7 +153,6 @@ if (SpeechRecognition) {
   recognition.lang = "en-US";
 
   recognition.onresult = (event) => {
-    // only handle speech if garden is active
     if (!gardenIsActive()) return;
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const res = event.results[i];
@@ -164,14 +165,10 @@ if (SpeechRecognition) {
   };
 
   recognition.onstart = () => {
-    // only start bird when we actually start listening
-    if (gardenIsActive()) {
-      startBirdLoop();
-    }
+    console.log("Speech recognition started");
   };
 
   recognition.onend = () => {
-    // only restart if we're past start time
     if (gardenIsActive()) {
       setTimeout(() => {
         try { recognition.start(); } catch (e) {}
@@ -179,9 +176,11 @@ if (SpeechRecognition) {
     }
   };
 
-  // 🚫 DON'T start immediately if it's before Nov 3, 2025
   if (gardenIsActive()) {
-    try { recognition.start(); } catch (e) {}
+    try {
+      recognition.start();
+      recognitionStarted = true;
+    } catch (e) {}
   } else {
     console.log("🌙 Garden is sleeping until", GARDEN_START.toLocaleString());
   }
@@ -189,20 +188,19 @@ if (SpeechRecognition) {
   console.warn("SpeechRecognition not supported.");
 }
 
-// ⏰ check every minute – when we pass the start time, start listening
+// auto-start recognition once time passes
 setInterval(() => {
-  if (!recognition) return;
-  if (gardenIsActive() && recognition && recognition._started !== true) {
+  if (!recognition || recognitionStarted) return;
+  if (gardenIsActive()) {
     try {
       recognition.start();
-      recognition._started = true;
-      startBirdLoop();
+      recognitionStarted = true;
       console.log("🌤️ Garden has started listening.");
     } catch (e) {}
   }
 }, 60 * 1000);
 
-// idle plant – only after start time
+// idle plant – only after start
 setInterval(() => {
   if (!gardenIsActive()) return;
   makePlantFromSpeech("idle sprout", 0.5);
@@ -213,7 +211,7 @@ function makePlantFromSpeech(text, confidence) {
   const plant = textToPlantConfig(text, confidence);
   buildPlantVisual(plant);
   addPlantLocal(plant);
-  sendPlantToServerJSONP(plant); // 👈 use JSONP
+  sendPlantToServerJSONP(plant);
 }
 
 function textToPlantConfig(text, confidence) {
@@ -285,7 +283,11 @@ function sendPlantToServerJSONP(p) {
 }
 
 // ====== poll remote plants (JSONP) ======
-setInterval(fetchRemotePlantsJSONP, 5000);
+
+// initial load
+fetchRemotePlantsJSONP();
+// then every 20s (less load)
+setInterval(fetchRemotePlantsJSONP, 20000);
 
 function fetchRemotePlantsJSONP() {
   jsonpRequest({
@@ -374,7 +376,7 @@ function expandCanvasIfNeeded(plant) {
 
 function analyzeEmotion(text) {
   const lower = text.toLowerCase();
-  const joy  = ["happy","fun","love","lovely","excited","yay","beautiful","nice","great","good","sunny"];
+  const joy  = ["happy","fun","love","lovely","excited","yay","beautiful","nice","great","good","sunny","morning","day"];
   const calm = ["calm","quiet","soft","peace","slow","breathe","gentle","relax"];
   const sad  = ["sad","tired","lonely","alone","upset","cry","crying","blue","exhausted"];
   const ang  = ["angry","mad","annoyed","frustrated","hate","stupid","ugh"];
@@ -554,7 +556,7 @@ function loop(timestamp) {
   requestAnimationFrame(loop);
 }
 
-// weather (same as before, still calls stopWeatherAudio, etc.)
+// weather – just uses drift / alpha, same as before
 function updateEffects(t) {
   if (effectMode === "none") return;
   const elapsed = t - effectConfig.startedAt;
@@ -580,22 +582,7 @@ function updateEffects(t) {
   }
 }
 
-// audio helpers
-function startBirdLoop() {
-  if (!audioBird) return;
-  audioBird.volume = 0.5;
-  const p = audioBird.play();
-  if (p && p.catch) p.catch(() => {});
-}
-function duckBird() { if (audioBird) audioBird.volume = 0.15; }
-function unduckBird() { if (audioBird) audioBird.volume = 0.5; }
-function stopWeatherAudio() {
-  [audioRainSoft, audioRainHeavy, audioWindGentle, audioWindStrong].forEach(a => {
-    if (!a) return;
-    a.pause();
-    a.currentTime = 0;
-  });
-}
+// ====== Audio helpers + unlock (for iOS) ======
 
 function startBirdLoop() {
   if (!audioBird) return;
@@ -613,29 +600,16 @@ function stopWeatherAudio() {
   });
 }
 
-/* 🌿 Unlock audio on first user tap (fix for iPad / iPhone Safari) */
+// unlock audio on first interaction (iOS Safari)
 let audioUnlocked = false;
-
 function unlockAudioOnce() {
   if (audioUnlocked) return;
   audioUnlocked = true;
-
-  // try to start ambience
   startBirdLoop();
-
-  // remove hint overlay if you added one
   const hint = document.getElementById("tap-hint");
   if (hint) hint.classList.add("hidden");
-
-  // remove listeners after first tap
-  window.removeEventListener("touchstart", unlockAudioOnce);
-  window.removeEventListener("click", unlockAudioOnce);
 }
-
-// listen for first user interaction
-window.addEventListener("touchstart", unlockAudioOnce, { passive: true });
-window.addEventListener("click", unlockAudioOnce);
-
+window.addEventListener("pointerdown", unlockAudioOnce, { once: true });
 
 // ====== midnight screenshot (POST ok) ======
 scheduleMidnightScreenshot();

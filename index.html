@@ -3,115 +3,217 @@
 <head>
   <meta charset="UTF-8" />
   <title>Listening Garden</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+  <!-- Lora font -->
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600&display=swap" rel="stylesheet"/>
+
   <style>
     html, body {
       margin: 0;
       padding: 0;
-      background: #ffffff;
-      overflow: auto;
+      background: #f3f1e8;
       height: 100%;
-      font-family: Garamond, serif;
+      font-family: "Lora", ui-serif, Georgia, "Times New Roman", serif;
+      color: #2a312f;
     }
-    canvas {
+
+    body {
+      overflow: auto; /* allow scroll as canvas grows */
+    }
+
+    #garden {
       display: block;
+      width: 100%;
+      height: auto;
     }
-    audio {
-      display: none;
-    }
-    /* popup */
+
+    /* popup backdrop */
     #email-popup-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.35);
+      background: rgba(12, 16, 11, 0.45);
+      backdrop-filter: blur(6px);
+      display: none; /* JS turns this on */
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem 1rem;
+      z-index: 9999;
+    }
+
+    /* popup panel */
+    .popup-panel {
+      background: #fbf7ee;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(21, 28, 23, 0.33);
+      width: min(420px, 100%);
+      padding: 1.5rem 1.3rem 1.1rem;
+      position: relative;
+    }
+
+    .popup-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin: 0 0 0.4rem;
+      letter-spacing: -0.01em;
+    }
+
+    .popup-text {
+      margin: 0 0 1rem;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      color: #535952;
+    }
+
+    .popup-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .popup-field label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #6a726e;
+    }
+
+    #email-input {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 12px;
+      border: 1px solid rgba(91, 96, 86, 0.25);
+      padding: 0.55rem 0.7rem;
+      font-size: 0.95rem;
+      font-family: inherit;
+      outline: none;
+      background: rgba(252, 250, 244, 0.95);
+      color: #282d27;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    /* avoid iOS zoom on focus */
+    @supports (-webkit-touch-callout: none) {
+      #email-input {
+        font-size: 16px !important;
+      }
+    }
+
+    #email-input:focus {
+      border-color: rgba(113, 140, 134, 0.8);
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(113, 140, 134, 0.18);
+    }
+
+    #email-submit {
+      width: 100%;
+      border: none;
+      border-radius: 999px;
+      padding: 0.6rem 0.7rem;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: #11110f;
+      color: #fdfbf6;
+      margin-top: 0.1rem;
+      font-family: inherit;
+      transition: background 0.15s ease, transform 0.05s ease-out;
+    }
+
+    #email-submit:hover {
+      background: #2d2b26;
+      transform: translateY(-1px);
+    }
+
+    #email-status {
+      margin-top: 0.55rem;
+      font-size: 0.75rem;
+      min-height: 0.9rem;
+      color: #4d6158;
+      word-break: break-word;
+    }
+
+    #email-close {
+      display: inline-block;
+      margin-top: 0.7rem;
+      font-size: 0.8rem;
+      color: #787c72;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: underline;
+      width: 100%;
+    }
+
+    #email-close:hover {
+      color: #282d27;
+    }
+
+    @media (max-width: 480px) {
+      .popup-panel {
+        padding: 1.2rem 1.1rem 1rem;
+        border-radius: 16px;
+      }
+      .popup-title {
+        font-size: 1.05rem;
+      }
+    }
+
+    /* optional "tap to wake" hint if you want it, currently unused */
+    #tap-hint {
+      position: fixed;
+      inset: 0;
       display: none;
       align-items: center;
       justify-content: center;
-      z-index: 9999;
+      font-size: 0.9rem;
+      color: #52574f;
+      background: rgba(243, 241, 232, 0.9);
+      z-index: 9998;
     }
-    #email-popup {
-      background: #fffef7;
-      border: 1px solid rgba(0,0,0,0.08);
-      border-radius: 14px;
-      width: min(90vw, 360px);
-      padding: 20px 20px 16px;
-      box-shadow: 0 14px 35px rgba(0,0,0,0.08);
-      margin-right: 100px;
-      font-family: Garamond, serif;
-    }
-    #email-popup h2 {
-      margin: 0 0 6px;
-      font-size: 1.05rem;
-      font-weight: 600;
-      color: #2c2a24;
-      font-family: Garamond, serif;
-    }
-    #email-popup p {
-      margin: 0 0 14px;
-      font-size: 0.82rem;
-      line-height: 1.4;
-      color: #5b574e;
-      font-family: Garamond, serif;
-    }
-    #email-input {
-      width: 100%;
-      padding: 8px 10px;
-      border-radius: 8px;
-      border: 1px solid rgba(0,0,0,0.12);
-      font-size: 0.82rem;
-      margin-bottom: 10px;
-      font-family: Garamond, serif;
-    }
-    #email-submit {
-      width: 100%;
-      padding: 8px 10px;
-      background: #000000;
-      color: #fffef9;
-      border: none;
-      border-radius: 8px;
-      font-size: 0.82rem;
-      cursor: pointer;
-      font-family: Garamond, serif;
-    }
-    #email-close {
-      margin-top: 10px;
-      width: 100%;
-      background: none;
-      border: none;
-      font-size: 0.7rem;
-      text-decoration: underline;
-      color: #868077;
-      cursor: pointer;
-      font-family: Garamond, serif;
-    }
-    #email-status {
-      font-size: 0.7rem;
-      margin-top: 8px;
-      font-family: Garamond, serif;
+    #tap-hint.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease-out;
     }
   </style>
 </head>
 <body>
+
   <canvas id="garden"></canvas>
 
-  <!-- AUDIO -->
-  <audio id="rainSoft" src="assets/rain_soft.mp3" loop></audio>
-  <audio id="rainHeavy" src="assets/rain_heavy.mp3" loop></audio>
-  <audio id="windGentle" src="assets/wind_gentle.mp3" loop></audio>
-  <audio id="windStrong" src="assets/wind_strong.mp3" loop></audio>
-  <audio id="birdAmbience" src="assets/bird.mp3" loop></audio>
+  <!-- ambient + weather audio -->
+  <audio id="birdAmbience" src="assets/bird.mp3" preload="auto" loop></audio>
+  <audio id="rainSoft" src="assets/rain-soft.mp3" preload="auto"></audio>
+  <audio id="rainHeavy" src="assets/rain-heavy.mp3" preload="auto"></audio>
+  <audio id="windGentle" src="assets/wind-gentle.mp3" preload="auto"></audio>
+  <audio id="windStrong" src="assets/wind-strong.mp3" preload="auto"></audio>
 
+  <!-- optional hint overlay -->
+  <div id="tap-hint">tap to wake the garden</div>
 
-  <!-- POPUP -->
+  <!-- email popup -->
   <div id="email-popup-backdrop">
-    <div id="email-popup">
-      <h2>Get the final picture</h2>
-      <p>Leave your email and we will send you the picture of the garden on <strong>November 13</strong>.</p>
-      <input id="email-input" type="email" placeholder="you@example.com" required />
+    <div class="popup-panel">
+      <h2 class="popup-title">Get the final picture</h2>
+      <p class="popup-text">
+        Leave your email and we will send you the picture of the garden on
+        <strong>November 13</strong>.
+      </p>
+      <div class="popup-field">
+        <label for="email-input">Email address</label>
+        <input
+          id="email-input"
+          type="email"
+          placeholder="you@example.com"
+          autocomplete="email"
+          inputmode="email"
+        />
+      </div>
       <button id="email-submit">Save my email</button>
-      <div id="email-status"></div>
-      <button id="email-close">Maybe later</button>
+      <p id="email-status"></p>
+      <span id="email-close">Maybe later</span>
     </div>
   </div>
 
