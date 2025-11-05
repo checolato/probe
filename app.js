@@ -1,9 +1,9 @@
 /************************************************************
  * Listening Garden – JSONP version (GitHub Pages + GAS)
- * This version is tuned for QR/mobile entry.
+ * QR / mobile–friendly with starter plants + smoother email.
  ************************************************************/
 
-// 1) your script URL (keep as your deployed Apps Script)
+// 1) your script URL (deployed Apps Script)
 const GAS_WEBAPP_URL =
   "https://script.google.com/macros/s/AKfycbyu6nlqTOzCWRrBFMwhV4ZbiUqg__98d-tqFpMCC2eRrTjuczb6glf4HcuBKGxmGsxJ9w/exec";
 
@@ -16,11 +16,22 @@ const DEFAULT_GARDEN_ID = "risd-main";
 const urlParams = new URLSearchParams(window.location.search);
 const GARDEN_ID = urlParams.get("garden") || DEFAULT_GARDEN_ID;
 
-// 🌿 Garden activation date/time (local time) – 4pm Nov 3 2025
+// 🌿 Garden activation date/time (local time) – e.g. 4pm Nov 3 2025
 const GARDEN_START = new Date("2025-11-03T16:00:00");
 function gardenIsActive() {
   return new Date() >= GARDEN_START;
 }
+
+// 🌱 Local-only starter plants (not saved to server)
+const SEED_SENTENCES = [
+  "Good morning, little garden",
+  "Nice to meet you",
+  "Have a nice day",
+  "How are you feeling today",
+  "Soft quiet thoughts",
+  "A gentle hello",
+  "Thank you for listening"
+];
 
 // ====== canvas ======
 const canvas = document.getElementById("garden");
@@ -61,9 +72,12 @@ document.addEventListener("touchend", e => {
 }, { passive: false });
 document.addEventListener("gesturestart", e => e.preventDefault(), { passive: false });
 
-// initial draw
+// initial draw + loop
 drawBackground();
 requestAnimationFrame(loop);
+
+// 🌱 show some local starter plants immediately (not saved to GAS)
+seedLocalPlants();
 
 window.addEventListener("resize", () => {
   canvas.width = window.innerWidth;
@@ -99,7 +113,7 @@ function hideEmailPopup() {
 
 if (popupClose) popupClose.addEventListener("click", hideEmailPopup);
 
-// EMAIL SAVE via JSONP, with soft timeout
+// EMAIL SAVE via JSONP, with soft timeout + auto close
 if (popupSubmit) {
   popupSubmit.addEventListener("click", () => {
     const email = (popupInput?.value || "").trim();
@@ -113,10 +127,14 @@ if (popupSubmit) {
     popupStatus.style.color = "#5b574e";
 
     let done = false;
+
+    // if network is slow, still give a nice success feeling + close
     const softTimeout = setTimeout(() => {
       if (done) return;
       popupStatus.textContent = "Saved. Thank you!";
       popupStatus.style.color = "#2d665f";
+      localStorage.setItem("gardenEmailSaved", "1");
+      setTimeout(hideEmailPopup, 1500);
     }, 3000);
 
     jsonpRequest({
@@ -132,7 +150,7 @@ if (popupSubmit) {
         popupStatus.textContent = "Saved. Thank you!";
         popupStatus.style.color = "#2d665f";
         localStorage.setItem("gardenEmailSaved", "1");
-        setTimeout(hideEmailPopup, 2000);
+        setTimeout(hideEmailPopup, 1500);
       } else {
         popupStatus.textContent = "Could not save right now.";
         popupStatus.style.color = "#c14949";
@@ -212,6 +230,8 @@ function makePlantFromSpeech(text, confidence) {
   buildPlantVisual(plant);
   addPlantLocal(plant);
   sendPlantToServerJSONP(plant);
+
+  // in case this is the first real plant, any preload logic could go here
 }
 
 function textToPlantConfig(text, confidence) {
@@ -255,6 +275,16 @@ function addPlantLocal(plant) {
     if (removed?.id) plantIndex.delete(removed.id);
   }
   expandCanvasIfNeeded(plant);
+}
+
+// 🌿 Create starter plants locally, without sending to server
+function seedLocalPlants() {
+  SEED_SENTENCES.forEach(text => {
+    const plant = textToPlantConfig(text, 0.9); // high confidence
+    buildPlantVisual(plant);
+    addPlantLocal(plant);
+    // IMPORTANT: no sendPlantToServerJSONP here
+  });
 }
 
 // ====== send plant → GAS (JSONP GET) ======
