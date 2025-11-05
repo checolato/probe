@@ -1,28 +1,27 @@
 /************************************************************
  * Listening Garden – JSONP version (GitHub Pages + GAS)
- * QR / mobile–friendly with starter plants + smoother email.
+ * QR/mobile friendly with starter plants + auto-closing popup
  ************************************************************/
 
-// 1) your script URL (deployed Apps Script)
+// 1) Apps Script web app URL (deployed as "Anyone with link")
 const GAS_WEBAPP_URL =
   "https://script.google.com/macros/s/AKfycbyu6nlqTOzCWRrBFMwhV4ZbiUqg__98d-tqFpMCC2eRrTjuczb6glf4HcuBKGxmGsxJ9w/exec";
 
-// 2) shared secret – must match Apps Script
+// 2) shared secret – must match SHARED_SECRET in Apps Script
 const GARDEN_SECRET = "risd-2025-garden";
 
 // 3) default shared garden
 const DEFAULT_GARDEN_ID = "risd-main";
-
 const urlParams = new URLSearchParams(window.location.search);
 const GARDEN_ID = urlParams.get("garden") || DEFAULT_GARDEN_ID;
 
-// 🌿 Garden activation date/time (local time) – e.g. 4pm Nov 3 2025
+// 🌿 Garden activation date/time (local) – 4pm Nov 3 2025
 const GARDEN_START = new Date("2025-11-03T16:00:00");
 function gardenIsActive() {
   return new Date() >= GARDEN_START;
 }
 
-// 🌱 Local-only starter plants (not saved to server)
+// 🌱 Local-only starter plants (NOT saved to server)
 const SEED_SENTENCES = [
   "Good morning, little garden",
   "Nice to meet you",
@@ -33,7 +32,7 @@ const SEED_SENTENCES = [
   "Thank you for listening"
 ];
 
-// ====== canvas ======
+// ====== canvas & state ======
 const canvas = document.getElementById("garden");
 const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
@@ -63,7 +62,7 @@ let effectConfig = {
   startedAt: 0
 };
 
-// iPad-ish double-tap zoom prevent
+// iOS double-tap zoom / pinch-zoom prevent (for iPad in gallery)
 let lastTouchEnd = 0;
 document.addEventListener("touchend", e => {
   const now = Date.now();
@@ -72,34 +71,17 @@ document.addEventListener("touchend", e => {
 }, { passive: false });
 document.addEventListener("gesturestart", e => e.preventDefault(), { passive: false });
 
-// initial draw + loop
-drawBackground();
-requestAnimationFrame(loop);
-
-// 🌱 show some local starter plants immediately (not saved to GAS)
-seedLocalPlants();
-
 window.addEventListener("resize", () => {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 });
 
-// ====== popup ======
+// ====== popup elements ======
 const popupBackdrop = document.getElementById("email-popup-backdrop");
 const popupInput    = document.getElementById("email-input");
 const popupSubmit   = document.getElementById("email-submit");
 const popupClose    = document.getElementById("email-close");
 const popupStatus   = document.getElementById("email-status");
-
-setTimeout(() => {
-  if (!localStorage.getItem("gardenEmailSaved")) {
-    showEmailPopup();
-  }
-}, 25000);
-
-window.addEventListener("keydown", e => {
-  if (e.key === "e" || e.key === "E") showEmailPopup();
-});
 
 function showEmailPopup() {
   if (!popupBackdrop) return;
@@ -111,9 +93,21 @@ function hideEmailPopup() {
   popupBackdrop.style.display = "none";
 }
 
+// show popup after 25s if not already saved
+setTimeout(() => {
+  if (!localStorage.getItem("gardenEmailSaved")) {
+    showEmailPopup();
+  }
+}, 25000);
+
+// press "e" to open popup
+window.addEventListener("keydown", e => {
+  if (e.key === "e" || e.key === "E") showEmailPopup();
+});
+
 if (popupClose) popupClose.addEventListener("click", hideEmailPopup);
 
-// EMAIL SAVE via JSONP, with soft timeout + auto close
+// EMAIL SAVE via JSONP, with soft timeout + auto-close
 if (popupSubmit) {
   popupSubmit.addEventListener("click", () => {
     const email = (popupInput?.value || "").trim();
@@ -128,7 +122,7 @@ if (popupSubmit) {
 
     let done = false;
 
-    // if network is slow, still give a nice success feeling + close
+    // If network is slow, still give a nice success feeling + close
     const softTimeout = setTimeout(() => {
       if (done) return;
       popupStatus.textContent = "Saved. Thank you!";
@@ -159,7 +153,7 @@ if (popupSubmit) {
   });
 }
 
-// ====== speech ======
+// ====== speech recognition ======
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let recognitionStarted = false;
@@ -194,6 +188,7 @@ if (SpeechRecognition) {
     }
   };
 
+  // start only if time is after garden start
   if (gardenIsActive()) {
     try {
       recognition.start();
@@ -206,7 +201,7 @@ if (SpeechRecognition) {
   console.warn("SpeechRecognition not supported.");
 }
 
-// auto-start recognition once time passes
+// auto-start recognition once time passes (checks every minute)
 setInterval(() => {
   if (!recognition || recognitionStarted) return;
   if (gardenIsActive()) {
@@ -230,8 +225,6 @@ function makePlantFromSpeech(text, confidence) {
   buildPlantVisual(plant);
   addPlantLocal(plant);
   sendPlantToServerJSONP(plant);
-
-  // in case this is the first real plant, any preload logic could go here
 }
 
 function textToPlantConfig(text, confidence) {
@@ -277,7 +270,7 @@ function addPlantLocal(plant) {
   expandCanvasIfNeeded(plant);
 }
 
-// 🌿 Create starter plants locally, without sending to server
+// 🌱 Create starter plants *locally*, without sending to server
 function seedLocalPlants() {
   SEED_SENTENCES.forEach(text => {
     const plant = textToPlantConfig(text, 0.9); // high confidence
@@ -313,12 +306,6 @@ function sendPlantToServerJSONP(p) {
 }
 
 // ====== poll remote plants (JSONP) ======
-
-// initial load
-fetchRemotePlantsJSONP();
-// then every 20s (less load)
-setInterval(fetchRemotePlantsJSONP, 20000);
-
 function fetchRemotePlantsJSONP() {
   jsonpRequest({
     action: "getPlants",
@@ -364,7 +351,6 @@ function mergeRemotePlants(remotePlants) {
 }
 
 // ====== canvas expansion, emotion, palettes, drawing, loop ======
-
 function expandCanvasIfNeeded(plant) {
   const margin = 120;
   const plantTop = plant.y - plant.height - margin;
@@ -416,7 +402,7 @@ function analyzeEmotion(text) {
   sad.forEach(w => lower.includes(w) && s.sad++);
   ang.forEach(w => lower.includes(w) && s.angry++);
 
-  let mood = "neutral", max=0;
+  let mood = "neutral", max = 0;
   for (const k in s) {
     if (s[k] > max) { max = s[k]; mood = k; }
   }
@@ -586,7 +572,7 @@ function loop(timestamp) {
   requestAnimationFrame(loop);
 }
 
-// weather – just uses drift / alpha, same as before
+// weather effects (rainout / windblow) – you can trigger effectMode elsewhere
 function updateEffects(t) {
   if (effectMode === "none") return;
   const elapsed = t - effectConfig.startedAt;
@@ -612,8 +598,7 @@ function updateEffects(t) {
   }
 }
 
-// ====== Audio helpers + unlock (for iOS) ======
-
+// ====== Audio helpers + unlock for iOS ======
 function startBirdLoop() {
   if (!audioBird) return;
   audioBird.volume = 0.5;
@@ -642,18 +627,18 @@ function unlockAudioOnce() {
 window.addEventListener("pointerdown", unlockAudioOnce, { once: true });
 
 // ====== midnight screenshot (POST ok) ======
-scheduleMidnightScreenshot();
 function scheduleMidnightScreenshot() {
   const now = new Date();
   const tomorrow = new Date(now);
   tomorrow.setDate(now.getDate() + 1);
-  tomorrow.setHours(0, 0, 5, 0);
+  tomorrow.setHours(0, 0, 5, 0); // 00:00:05
   const ms = tomorrow.getTime() - now.getTime();
   setTimeout(() => {
     sendCanvasScreenshot();
     scheduleMidnightScreenshot();
   }, ms);
 }
+
 function sendCanvasScreenshot() {
   if (!canvas) return;
   const dataURL = canvas.toDataURL("image/png");
@@ -686,10 +671,18 @@ function jsonpRequest(paramsObj, callback) {
   document.body.appendChild(script);
 }
 
-// utils
+// ====== utils ======
 function genPlantId() {
   return "p_" + Date.now().toString(36) + "_" + Math.floor(Math.random() * 1e6).toString(36);
 }
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function rand(min, max) { return Math.random() * (max - min) + min; }
 function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
+
+// ====== INITIALIZE ======
+drawBackground();          // paint base
+seedLocalPlants();         // show starter plants immediately
+requestAnimationFrame(loop);
+fetchRemotePlantsJSONP();  // load shared plants from GAS
+setInterval(fetchRemotePlantsJSONP, 20000); // poll every 20s
+scheduleMidnightScreenshot();
